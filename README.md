@@ -1,6 +1,12 @@
 # home-alarm
 fire-alarm sensors based on arduino and raspberry pi
 
+## TODO
+* Make RF24 work together with influxdb client in python (python2 vs  python3 libraries)
+* Integrate actual CO, smoke and temperature sensors on arduino
+* Create android app
+* Integrate Google Cloud Messaging in app and rpi edge device
+* ...
 
 ## Install RF24 driver
 ```bash
