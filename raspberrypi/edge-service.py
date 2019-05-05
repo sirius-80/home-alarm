@@ -5,39 +5,54 @@ import influxdb
 import RF24
 import datetime
 import json
+from enum import Enum
+import traceback
+import threading
 
 
 class TimeoutMonitor:
     """Simple monitor that will trigger given alert_function when no data is received from sensors anymore."""
     def __init__(self, timeout_sec, alert_function, *args):
-        self._timeout_sec = timeout
+        self._timeout_sec = timeout_sec
         self._reset = False
         self._alert_function = alert_function
         self._args = args
+        self._active = False
+        self._thread = threading.Thread(target=self._run)
 
     def start(self):
-        while True:
+        self._active = True
+        self._thread.start()
+
+    def stop(self):
+        print("Stopping monitor...")
+        self._active = False
+        self._thread.join()
+
+    def _run(self):
+        while self._active:
             try:
                 self._monitor()
                 self._reset = False
             except TimeoutError:
                 self._alert_function(*self._args)
+        print("Monitor stops")
 
     def reset(self):
         self._reset = True
 
     def _monitor(self):
         start_time = time.time()
-        while not self._reset:
+        while not self._reset and self._active:
             now = time.time()
-            if self.timeout_sec > now - start_time:
+            if self._timeout_sec < (now - start_time):
                 raise TimeoutError
             time.sleep(1)
 
 
 class RadioReceiver:
     """Provide access to the nrf2401+ radio device"""
-    def __init__(self, listening_address="00001"):
+    def __init__(self, listening_address=b"00001"):
         self.radio = RF24.RF24(RF24.RPI_V2_GPIO_P1_15, RF24.BCM2835_SPI_CS0, RF24.BCM2835_SPI_SPEED_8MHZ)
         # self.radio = RF24.RF24(22,0)
         self.radio.begin()
@@ -54,7 +69,7 @@ class RadioReceiver:
             time.sleep(1)
 
         print("Data available!")
-        msg = radio.read(radio.payloadSize)
+        msg = self.radio.read(self.radio.payloadSize)
         print("Received: '%s'" % msg)
         return msg
 
@@ -135,7 +150,7 @@ class ExternalMessagingService:
         pass
 
     def send(self, message):
-        print("TODO: Implement sending alert to external messaging service: '%s'")
+        print("TODO: Implement sending alert to external messaging service: '%s'" % message)
 
 
 class EdgeService:
@@ -146,30 +161,42 @@ class EdgeService:
         for sensor_id in sensor_device_id_list:
             sensor = SensorDevice(sensor_id)
             self.sensors[sensor_id] = sensor
-            self.monitors[sensor_id] = TimeoutMonitor(20, self._handle_sensor_timeout, sensor)
+            monitor = TimeoutMonitor(20, self._handle_sensor_timeout, sensor)
+            self.monitors[sensor_id] = monitor
+            monitor.start()
         self.sensor_device_id_list = sensor_device_id_list
         self.radio_receiver = RadioReceiver()
         self.database = InfluxDbClient()
 
     def _handle_sensor_timeout(self, sensor):
-        message = "Sensor with id %s timed out, taking it offline!" % sensor.id
+        if sensor.state == DeviceState.ONLINE:
+            message = "Sensor with id %s timed out, taking it offline!" % sensor.id
+        else:
+            message = "Sensor with id %s is still offline..." % sensor.id
         sensor.offline()
         self.message_service.send(message)
 
     def run(self):
-        try:
-            msg = self.radio_receiver.read_measurement()
-            measurement = convert_radio_message_to_measurement(msg)
+        active = True
+        while active:
+            try:
+                msg = self.radio_receiver.read_measurement()
+                measurement = convert_radio_message_to_measurement(msg)
 
-            # The device seems to be online!
-            self.monitors[measurement.device_id].reset()
-            self.sensors[measurement.device_id].online()
+                # The device seems to be online!
+                self.monitors[measurement.device_id].reset()
+                self.sensors[measurement.device_id].online()
 
-            # store the data
-            self.database.add_measurement(measurement)
-
-        except Exception as err:
-            print("ERROR: %s" % err)
+                # store the data
+                self.database.add_measurement(measurement)
+            except KeyboardInterrupt:
+                print("Keyboard interrupt! Stopping service...")
+                active = False
+                for monitor in self.monitors.values():
+                    monitor.stop()
+            except Exception as err:
+                print("ERROR: %s" % err)
+                traceback.print_exc()
 
 
 if __name__ == "__main__":
