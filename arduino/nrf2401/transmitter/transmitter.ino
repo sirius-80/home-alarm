@@ -62,7 +62,9 @@ const char* generate_message() {
 void loop() {
   int selector = random(3);
   const char* msg = generate_message();
+  radio.powerUp();
   bool sent = radio.write(msg, strlen(msg));
+  radio.powerDown();
   Serial.print("Msg sent[");
   Serial.print(sent);
   Serial.print("]: "); 
