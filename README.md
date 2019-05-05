@@ -4,9 +4,12 @@ fire-alarm sensors based on arduino and raspberry pi
 ## TODO
 * Integrate actual CO, smoke and temperature sensors on arduino
 * Create android app
-* Integrate Google Cloud Messaging in app and rpi edge device
+* Integrate Google firebase Messaging in app and rpi edge device
 * ...
-* use power-saving of nrf2401 on arduino
+* minimize power-consumption of arduino + sensors
+* autostart apps on raspberry pi
+** Grafana
+** Edge service
 
 ## Make python3 the default using update-alternatives
 ```
