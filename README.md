@@ -2,12 +2,33 @@
 fire-alarm sensors based on arduino and raspberry pi
 
 ## TODO
-* Make RF24 work together with influxdb client in python (python2 vs  python3 libraries)
-* Fix 0-entry in arduino message...
 * Integrate actual CO, smoke and temperature sensors on arduino
 * Create android app
 * Integrate Google Cloud Messaging in app and rpi edge device
 * ...
+* use power-saving of nrf2401 on arduino
+
+## Make python3 the default using update-alternatives
+```
+$ sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
+update-alternatives: using /usr/bin/python2 to provide /usr/bin/python (python) in auto mode
+$ sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+update-alternatives: using /usr/bin/python3 to provide /usr/bin/python (python) in auto mode
+$ # As we'given python3 a higher priority, it should now be the default
+$ python --version
+Python 3.5.3
+$ # Optionally change the default, using update-alternatives
+$ sudo update-alternatives --config python
+There are 2 choices for the alternative python (providing /usr/bin/python).
+
+  Selection    Path              Priority   Status
+------------------------------------------------------------
+* 0            /usr/bin/python3   2         auto mode
+  1            /usr/bin/python2   1         manual mode
+  2            /usr/bin/python3   2         manual mode
+
+Press <enter> to keep the current choice[*], or type selection number:
+```
 
 ## Install RF24 driver
 ```bash
@@ -18,12 +39,12 @@ make
 sudo make install
 cd pyRF24/
 sudo apt-get install python-dev libboost-python-dev 
-sudo ln -s /usr/lib/arm-linux-gnueabihf/libboost_python-py34.so /usr/lib/arm-linux-gnueabihf/libboost_python3.so
+# Note: the name of the so-file to link depends on the version of python 
+sudo ln -s /usr/lib/arm-linux-gnueabihf/libboost_python-py35.so /usr/lib/arm-linux-gnueabihf/libboost_python3.so
 sudo apt-get install python-setuptools 
 sudo apt-get install python3-setuptools 
-chmod +x setup.py 
-./setup.py build
-sudo ./setup.py install
+python3 setup.py build
+sudo python3 setup.py install
 ```
 
 ## Install influxdb on raspbery pi
@@ -34,7 +55,7 @@ curl -sL https://repos.influxdata.com/influxdb.key | sudo apt-key add
 sudo apt-get update
 sudo apt-get install influxdb
 ```
-* Update influxdb config: enable http and bind-address
+* Update influxdb config: enable http and set bind-address to port 8086
 ```sudo vi /etc/influxdb/influxdb.conf```
 ```
 ...
@@ -56,7 +77,7 @@ sudo apt-get install influxdb
   ...
 ```
 * Start influx deamon ```sudo service influxdb start```
-* Install python support ```python3 -m pip install influxdb```
+* Install python support ```sudo python3 -m pip install influxdb```
 
 
 ## Configure influxdb
