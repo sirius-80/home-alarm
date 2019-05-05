@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
+import influxdb
 import RF24
 import time
+import datetime
 import json
-#import influxdb
+
 
 
 def setup_nrf24():
-    radio = RF24.RF24(22,0)
-    #radio = RF24.RF24(RF24.RPI_V2_GPIO_P1_15, RF24.BCM2835_SPI_CS0, RF24.BCM2835_SPI_SPEED_8MHZ)
-    address = "00001"
+    #radio = RF24.RF24(22,0)
+    radio = RF24.RF24(RF24.RPI_V2_GPIO_P1_15, RF24.BCM2835_SPI_CS0, RF24.BCM2835_SPI_SPEED_8MHZ)
+    address = b"00001"
     radio.begin()
     #radio.enableDynamicPayloads()
     radio.setRetries(15,15)
@@ -36,8 +38,8 @@ class Measurement:
         self.co_ppm = co_ppm
 
     @classmethod
-    def from_msg(cls, s):
-        parts = s.split("\0")[0].split(",")
+    def from_msg(cls, b):
+        parts = b.decode("utf-8").strip("\x00").split(",")
         print(parts)
         device_id = parts[0]
         temperature = int(parts[1])
@@ -49,7 +51,7 @@ class Measurement:
         return json.dumps(self.__dict__)
 
     def to_influxdb_json(self):
-        timestamp = time.time()
+        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         return [
             {
                 "measurement": "smoke-detector-events",
@@ -73,15 +75,16 @@ def read_measurement(radio):
     print("Data available!")
     msg = radio.read(radio.payloadSize)
     print("Received: '%s'" % msg)
-    measurement = Measurement.from_msg(str(msg))
+    measurement = Measurement.from_msg(msg)
     print("Received: '%s'" % measurement)
     return measurement
 
 
 if __name__ == "__main__":
     radio = setup_nrf24()
-    #client = setup_influxdb_client()
+    client = setup_influxdb_client()
     while True:
         measurement = read_measurement(radio)
-        #client.write_points(measurement.to_influxdb_json())
+        print(measurement.to_influxdb_json())
+        client.write_points(measurement.to_influxdb_json())
         
