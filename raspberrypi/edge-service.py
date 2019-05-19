@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import sys
 import time
 import influxdb
 import RF24
@@ -8,11 +8,14 @@ import json
 from enum import Enum
 import traceback
 import threading
+import urllib.request
+import requests
 
 
 class TimeoutMonitor:
     """Simple monitor that will trigger given alert_function when no data is received from sensors anymore."""
     def __init__(self, timeout_sec, alert_function, *args):
+        """Sets up the monitor. Upon a time-out, the alert_function will be called, with the provided *args."""
         self._timeout_sec = timeout_sec
         self._reset = False
         self._alert_function = alert_function
@@ -39,9 +42,12 @@ class TimeoutMonitor:
         print("Monitor stops")
 
     def reset(self):
+        """Resets the monitor (restarts the time-out sequence).
+        Must be called periodically to prevent a time-out."""
         self._reset = True
 
     def _monitor(self):
+        """Single monitoring loop: either stops by reset, or generates a time-out."""
         start_time = time.time()
         while not self._reset and self._active:
             now = time.time()
@@ -123,11 +129,13 @@ class Measurement:
 
 
 class DeviceState(Enum):
+    """Sensor devices can be either ONLINE or OFFLINE"""
     OFFLINE = 0
     ONLINE = 1
 
 
 class SensorDevice:
+    """Simple class to manaage the state of a sensor-device."""
     def __init__(self, id):
         self.id = id
         self.state = DeviceState.OFFLINE
@@ -144,18 +152,28 @@ class SensorDevice:
 
 
 class ExternalMessagingService:
-    """"Proxy for Google Cloud Messaging or comparable push-message service.
-    TODO: Implement!"""
-    def __init__(self):
-        pass
+    """"Proxy for Google Firebase Messaging or comparable push-message service."""
+    def __init__(self, base_url):
+        self.base_url = base_url
 
-    def send(self, message):
-        print("TODO: Implement sending alert to external messaging service: '%s'" % message)
+    def send_alert(self, title, body):
+        self._send("alert", title, body)
+
+    def send_notification(self, title, body):
+        self._send("note", title, body)
+
+    def _send(self, topic, title, body):
+        print("Sending %s to external messaging service: '%s:%s'" % (topic, title. body))
+        params = {"topic": "alert", "title": title, "body": body}
+        url = requests.get(self.base_url, params=params)
+        print(urllib.request.urlopen(url).read().close())
 
 
 class EdgeService:
-    def __init__(self, sensor_device_id_list):
-        self.message_service = ExternalMessagingService()
+    """Monitors all sensor devices, forwards received measurements to the database, and
+    triggers the message service when a sensor device times out."""
+    def __init__(self, sensor_device_id_list, base_url_msg_svc):
+        self.message_service = ExternalMessagingService(base_url_msg_svc)
         self.sensors = {}
         self.monitors = {}
         for sensor_id in sensor_device_id_list:
@@ -170,14 +188,16 @@ class EdgeService:
 
     def _handle_sensor_timeout(self, sensor):
         if sensor.state == DeviceState.ONLINE:
-            message = "Sensor with id %s timed out, taking it offline!" % sensor.id
+            message = "Sensor with id %s timed out. It is now considered to be offline!" % sensor.id
+            print(message)
+            sensor.offline()
+            self.message_service.send_notification("Device status changed", message)
         else:
-            message = "Sensor with id %s is still offline..." % sensor.id
-        sensor.offline()
-        self.message_service.send(message)
+            print("Sensor with id %s is still offline..." % sensor.id)
 
     def run(self):
         active = True
+        self.message_service.send_alert("Service status changed", "The edge-service is up. Your devices are being monitored.")
         while active:
             try:
                 msg = self.radio_receiver.read_measurement()
@@ -185,12 +205,19 @@ class EdgeService:
 
                 # The device seems to be online!
                 self.monitors[measurement.device_id].reset()
-                self.sensors[measurement.device_id].online()
+                sensor = self.sensors[measurement.device_id]
+                if sensor.state == DeviceState.OFFLINE:
+                    sensor.online()
+                    self.message_service.send_notification("Device status changed", "Sensor with id %s came online." % sensor.id)
 
-                # store the data
+                # check the data for possible fire or high CO concentration
+                self.check_data_alerts(measurement)
+
+                # Store the data
                 self.database.add_measurement(measurement)
             except KeyboardInterrupt:
                 print("Keyboard interrupt! Stopping service...")
+                self.message_service.send_alert("Service status changed", "The edge-service is going down! Your devices are no longer being monitored!")
                 active = False
                 for monitor in self.monitors.values():
                     monitor.stop()
@@ -198,7 +225,13 @@ class EdgeService:
                 print("ERROR: %s" % err)
                 traceback.print_exc()
 
+    def check_data_alerts(self, measurement):
+        if measurement.temperature > 60 or measurement.smoke_ppm > 100:
+            self.message_service.send_alert("Probably fire!", "The temperature is %d degrees C, smoke is at %d ppm" % (measurement.temperature, measurement.smoke_ppm))
+        elif measurement.co_ppm > 100:
+            self.message_service.send_alert("Carbon-monoxide alert!", "High amount of CO in the air (%d ppm)" % measurement.co_ppm)
+
 
 if __name__ == "__main__":
-    service = EdgeService(["6c89f539", "dummy"])
+    service = EdgeService(["6c89f539", "dummy"], base_url=sys.args[1])
     service.run()
