@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import sys
 import time
 import influxdb
@@ -157,16 +158,15 @@ class ExternalMessagingService:
         self.base_url = base_url
 
     def send_alert(self, title, body):
-        self._send("alert", title, body)
+        self._send("alerts", title, body)
 
     def send_notification(self, title, body):
-        self._send("note", title, body)
+        self._send("notes", title, body)
 
     def _send(self, topic, title, body):
-        print("Sending %s to external messaging service: '%s:%s'" % (topic, title. body))
-        params = {"topic": "alert", "title": title, "body": body}
-        url = requests.get(self.base_url, params=params)
-        print(urllib.request.urlopen(url).read().close())
+        print("Sending %s to external messaging service: '%s:%s'" % (topic, title, body))
+        params = {"topic": topic, "title": title, "body": body}
+        print(requests.get(self.base_url, params=params))
 
 
 class EdgeService:
@@ -226,12 +226,12 @@ class EdgeService:
                 traceback.print_exc()
 
     def check_data_alerts(self, measurement):
-        if measurement.temperature > 60 or measurement.smoke_ppm > 100:
+        if measurement.temperature > 28 or measurement.smoke_ppm > 100:
             self.message_service.send_alert("Probably fire!", "The temperature is %d degrees C, smoke is at %d ppm" % (measurement.temperature, measurement.smoke_ppm))
-        elif measurement.co_ppm > 100:
+        elif measurement.co_ppm > 200:
             self.message_service.send_alert("Carbon-monoxide alert!", "High amount of CO in the air (%d ppm)" % measurement.co_ppm)
 
 
 if __name__ == "__main__":
-    service = EdgeService(["6c89f539", "dummy"], base_url=sys.args[1])
+    service = EdgeService(["6c89f539", "dummy"], sys.argv[1])
     service.run()
