@@ -101,6 +101,32 @@ echo "deb https://dl.bintray.com/fg2it/deb jessie main" | sudo tee -a /etc/apt/s
 sudo apt-get update && sudo apt-get install grafana
 ```
 
+## Autostart grafana during startup
+```
+sudo update-rc.d grafana-server defaults
+sudo systemctl enable grafana-server.service 
+```
+
 ## Configure grafana
+
 * Add influxdb as datasource
 * Create dashboard
+
+
+## Autostart edge-service during startup
+```
+sudo cat >> /etc/init.d/edge-service-script
+### BEGIN INIT INFO
+# Provides:          scriptname
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start daemon at boot time
+# Description:       Enable service provided by daemon.
+### END INIT INFO
+/path/to/edge-service.py <url-to-addMessage-function>
+EOF
+sudo chmod +x /etc/init.d/edge-service-script
+sudo update-rc.d edge-service-script defaults
+````
