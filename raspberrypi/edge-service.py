@@ -175,6 +175,7 @@ class EdgeService:
     """Monitors all sensor devices, forwards received measurements to the database, and
     triggers the message service when a sensor device times out."""
     def __init__(self, sensor_device_id_list, base_url_msg_svc):
+        logger.info("Starting EdgeService. Messages will be sent to %s", base_url_msg_svc)
         self.message_service = ExternalMessagingService(base_url_msg_svc)
         self.sensors = {}
         self.monitors = {}
@@ -204,6 +205,7 @@ class EdgeService:
             try:
                 msg = self.radio_receiver.read_measurement()
                 measurement = convert_radio_message_to_measurement(msg)
+                logger.debug("Received measurement: %s", measurement)
 
                 # The device seems to be online!
                 self.monitors[measurement.device_id].reset()
