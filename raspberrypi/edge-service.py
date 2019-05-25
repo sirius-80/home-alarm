@@ -12,6 +12,7 @@ import threading
 import urllib.request
 import requests
 import logging
+import logging.handlers
 
 
 class TimeoutMonitor:
@@ -249,5 +250,5 @@ if __name__ == "__main__":
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-    service = EdgeService(["6c89f539", "dummy"], sys.argv[1])
+    service = EdgeService(["6c89f539", "dummy"], args.base_url)
     service.run()
