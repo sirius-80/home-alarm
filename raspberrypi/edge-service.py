@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+import argparse
 import sys
 import time
 import influxdb
@@ -11,6 +11,7 @@ import traceback
 import threading
 import urllib.request
 import requests
+import logging
 
 
 class TimeoutMonitor:
@@ -29,7 +30,7 @@ class TimeoutMonitor:
         self._thread.start()
 
     def stop(self):
-        print("Stopping monitor...")
+        logger.info("Stopping monitor...")
         self._active = False
         self._thread.join()
 
@@ -40,7 +41,7 @@ class TimeoutMonitor:
                 self._reset = False
             except TimeoutError:
                 self._alert_function(*self._args)
-        print("Monitor stops")
+        logger.info("Monitor stops")
 
     def reset(self):
         """Resets the monitor (restarts the time-out sequence).
@@ -75,16 +76,16 @@ class RadioReceiver:
         while not self.radio.available():
             time.sleep(1)
 
-        print("Data available!")
+        logger.debug("Data available!")
         msg = self.radio.read(self.radio.payloadSize)
-        print("Received: '%s'" % msg)
+        logger.debug("Received: '%s'" % msg)
         return msg
 
 
 def convert_radio_message_to_measurement(msg):
     """Constructs a Measurement object from a binary sensor message"""
     parts = msg.decode("utf-8").strip("\x00").split(",")
-    print(parts)
+    logger.debug(str(parts))
     device_id = parts[0]
     temperature = int(parts[1])
     smoke_ppm = int(parts[2])
@@ -143,12 +144,12 @@ class SensorDevice:
 
     def offline(self):
         if self.state == DeviceState.ONLINE:
-            print("Sensor %s went offline!" % self.id)
+            logger.warning("Sensor %s went offline!", self.id)
         self.state = DeviceState.OFFLINE
 
     def online(self):
         if self.state == DeviceState.OFFLINE:
-            print("Sensor %s came online!" % self.id)
+            logger.warning("Sensor %s came online!", self.id)
         self.state = DeviceState.ONLINE
 
 
@@ -164,9 +165,9 @@ class ExternalMessagingService:
         self._send("notes", title, body)
 
     def _send(self, topic, title, body):
-        print("Sending %s to external messaging service: '%s:%s'" % (topic, title, body))
+        logger.info("Sending %s to external messaging service: '%s:%s'", topic, title, body)
         params = {"topic": topic, "title": title, "body": body}
-        print(requests.get(self.base_url, params=params))
+        logger.debug(str(requests.get(self.base_url, params=params)))
 
 
 class EdgeService:
@@ -189,11 +190,11 @@ class EdgeService:
     def _handle_sensor_timeout(self, sensor):
         if sensor.state == DeviceState.ONLINE:
             message = "Sensor with id %s timed out. It is now considered to be offline!" % sensor.id
-            print(message)
+            logger.warning(message)
             sensor.offline()
             self.message_service.send_notification("Device status changed", message)
         else:
-            print("Sensor with id %s is still offline..." % sensor.id)
+            logger.debug("Sensor with id %s is still offline...", sensor.id)
 
     def run(self):
         active = True
@@ -216,13 +217,13 @@ class EdgeService:
                 # Store the data
                 self.database.add_measurement(measurement)
             except KeyboardInterrupt:
-                print("Keyboard interrupt! Stopping service...")
+                logger.info("Keyboard interrupt! Stopping service...")
                 self.message_service.send_alert("Service status changed", "The edge-service is going down! Your devices are no longer being monitored!")
                 active = False
                 for monitor in self.monitors.values():
                     monitor.stop()
             except Exception as err:
-                print("ERROR: %s" % err)
+                logger.error(str(err))
                 traceback.print_exc()
 
     def check_data_alerts(self, measurement):
@@ -233,5 +234,20 @@ class EdgeService:
 
 
 if __name__ == "__main__":
+    LOG_FILENAME = "/tmp/edge-service.log"
+    LOG_LEVEL = logging.INFO
+    parser = argparse.ArgumentParser(description="Home-alarm edge service")
+    parser.add_argument("-l", "--log", help="file to write log to (default '" + LOG_FILENAME + "')")
+    parser.add_argument("-b", "--base-url", help="url for firebase addMessage function service")
+    args = parser.parse_args()
+    if args.log:
+        LOG_FILENAME = args.log
+    logger = logging.getLogger(__name__)
+    logger.setLevel(LOG_LEVEL)
+    handler = logging.handlers.TimedRotatingFileHandler(LOG_FILENAME, when="midnight", backupCount=3)
+    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
     service = EdgeService(["6c89f539", "dummy"], sys.argv[1])
     service.run()
