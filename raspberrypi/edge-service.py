@@ -182,7 +182,7 @@ class EdgeService:
         for sensor_id in sensor_device_id_list:
             sensor = SensorDevice(sensor_id)
             self.sensors[sensor_id] = sensor
-            monitor = TimeoutMonitor(20, self._handle_sensor_timeout, sensor)
+            monitor = TimeoutMonitor(60, self._handle_sensor_timeout, sensor)
             self.monitors[sensor_id] = monitor
             monitor.start()
         self.sensor_device_id_list = sensor_device_id_list
