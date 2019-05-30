@@ -5,6 +5,9 @@
 RF24 radio(7, 8); //CNS, CE
 const byte address[6] = "00001";
 const char* device_id = "6c89f539";
+int tempPin = A0;
+int smokePin = A5;
+
 
 static FILE uartout = {0};
 
@@ -19,6 +22,9 @@ static int uart_putchar (char c, FILE *stream)
 
 
 void setup() {
+//  analogReference(INTERNAL);
+  pinMode(tempPin, INPUT);
+  pinMode(smokePin, INPUT);
   // Enable radio.printDetails to print to serial out
   Serial.begin(115200);
   fdev_setup_stream (&uartout, uart_putchar, NULL, _FDEV_SETUP_WRITE);
@@ -39,18 +45,25 @@ void setup() {
 }
 
 int read_temperature() {
-  // TODO: Replace with actual measurement
-  return random(15,35);
+  int val = analogRead(tempPin);
+  int celsius = (int) ((5.0 * val * 100.0) / 4096);
+  Serial.print("Temperature: ");
+  Serial.print(celsius);
+  Serial.print(" degrees");
+  Serial.print(" (");
+  Serial.print(val);
+  Serial.println(")");
+  return celsius;
 }
 
 int read_smoke_ppm() {
-  // TODO: Replace with actual measurement
-  return random(2, 50);
+  int smoke_ppm = analogRead(smokePin);
+  return smoke_ppm;
 }
 
 int read_co_ppm() {
   // TODO: Replace with actual measurement
-  return random(10, 150);
+  return -1;//random(10, 150);
 }
 
 const char* generate_message() {
@@ -60,7 +73,6 @@ const char* generate_message() {
 }
 
 void loop() {
-  int selector = random(3);
   const char* msg = generate_message();
   radio.powerUp();
   bool sent = radio.write(msg, strlen(msg));
@@ -69,5 +81,5 @@ void loop() {
   Serial.print(sent);
   Serial.print("]: "); 
   Serial.println(msg);
-  delay(1000);
+  delay(30000);
 }
