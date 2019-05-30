@@ -230,7 +230,7 @@ class EdgeService:
                 traceback.print_exc()
 
     def check_data_alerts(self, measurement):
-        if measurement.temperature > 28 or measurement.smoke_ppm > 100:
+        if measurement.temperature > 50 or measurement.smoke_ppm > 600:
             self.message_service.send_alert("Probably fire!", "The temperature is %d degrees C, smoke is at %d ppm" % (measurement.temperature, measurement.smoke_ppm))
         elif measurement.co_ppm > 200:
             self.message_service.send_alert("Carbon-monoxide alert!", "High amount of CO in the air (%d ppm)" % measurement.co_ppm)
