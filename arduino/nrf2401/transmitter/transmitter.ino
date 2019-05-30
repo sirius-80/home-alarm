@@ -39,7 +39,7 @@ void setup() {
   }
   radio.setDataRate(RF24_250KBPS);
   radio.openWritingPipe(address);
-  radio.setPALevel(RF24_PA_MIN);
+  radio.setPALevel(RF24_PA_LOW);
   radio.stopListening();
   radio.printDetails();
 }
