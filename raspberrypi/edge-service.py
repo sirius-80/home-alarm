@@ -13,6 +13,22 @@ import urllib.request
 import requests
 import logging
 import logging.handlers
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
+
+class FirestoreClient:
+    def __init__(self):
+        cred = credentials.Certificate('home-monitor-bb687-firebase-adminsdk-t4efc-70544a2138.json')
+        firebase_admin.initialize_app(cred)
+        self.db = firestore.client()
+
+    def add_measurement(self, measurement):
+        sensor_id = measurement.device_id
+        sensor_doc_ref = self.db.collection(u'sensors').document(sensor_id)
+        measurement_id = measurement.timestamp()
+        sensor_doc_ref.document(measurement_id).set(measurement.dict())
 
 
 class TimeoutMonitor:
@@ -101,14 +117,13 @@ class InfluxDbClient:
 
     def add_measurement(self, measurement):
         """Converts this Measurement to influxdb compatible json"""
-        timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         data = [
             {
                 "measurement": "smoke-detector-events",
                 "tags": {
                     "device-id": measurement.device_id,
                 },
-                "time": timestamp,
+                "time": measurement.timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "fields": {
                     "temperature": measurement.temperature,
                     "smoke_ppm": measurement.smoke_ppm,
@@ -126,9 +141,13 @@ class Measurement:
         self.temperature = temperature
         self.smoke_ppm = smoke_ppm
         self.co_ppm = co_ppm
+        self.timestamp = datetime.datetime.utcnow()
 
     def __str__(self):
         return json.dumps(self.__dict__)
+
+    def dict(self):
+        return self.__dict__.copy()
 
 
 class DeviceState(Enum):
@@ -187,7 +206,8 @@ class EdgeService:
             monitor.start()
         self.sensor_device_id_list = sensor_device_id_list
         self.radio_receiver = RadioReceiver()
-        self.database = InfluxDbClient()
+        self.influx = InfluxDbClient()
+        self.firestore = FirestoreClient()
 
     def _handle_sensor_timeout(self, sensor):
         if sensor.state == DeviceState.ONLINE:
@@ -218,7 +238,8 @@ class EdgeService:
                 self.check_data_alerts(measurement)
 
                 # Store the data
-                self.database.add_measurement(measurement)
+                self.influx.add_measurement(measurement)
+                self.firestore.add_measurement(measurement)
             except KeyboardInterrupt:
                 logger.info("Keyboard interrupt! Stopping service...")
                 self.message_service.send_alert("Service status changed", "The edge-service is going down! Your devices are no longer being monitored!")
