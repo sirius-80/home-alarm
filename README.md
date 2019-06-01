@@ -112,6 +112,8 @@ sudo systemctl enable grafana-server.service
 * Add influxdb as datasource
 * Create dashboard
 
+## Install firebase
+pip install --upgrade firebase-admin
 
 ## Autostart edge-service during startup
 ```
