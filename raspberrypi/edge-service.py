@@ -28,6 +28,10 @@ class FirestoreClient:
         measurement_id = str(measurement.timestamp.timestamp())
         measurement_doc_ref.document(measurement_id).set(measurement.dict())
 
+    def update_sensor_data(self, sensor):
+        sensor_doc_ref = self.db.collection(u'sensors').document(sensor.id)
+        sensor_doc_ref.set(sensor.dict(), merge=True)
+
 
 class TimeoutMonitor:
     """Simple monitor that will trigger given alert_function when no data is received from sensors anymore."""
@@ -159,6 +163,7 @@ class SensorDevice:
     def __init__(self, id):
         self.id = id
         self.state = DeviceState.OFFLINE
+        self.up_since = None
 
     def offline(self):
         if self.state == DeviceState.ONLINE:
@@ -167,8 +172,14 @@ class SensorDevice:
 
     def online(self):
         if self.state == DeviceState.OFFLINE:
+            self.up_since = datetime.datetime.utcnow()
             logger.warning("Sensor %s came online!", self.id)
         self.state = DeviceState.ONLINE
+
+    def dict(self):
+        return {"id": self.id,
+                "state": self.state.name,
+                "up_since": self.up_since}
 
 
 class ExternalMessagingService:
@@ -212,6 +223,7 @@ class EdgeService:
             message = "Sensor with id %s timed out. It is now considered to be offline!" % sensor.id
             logger.warning(message)
             sensor.offline()
+            self.firestore.update_sensor_data(sensor)
             self.message_service.send_notification("Device status changed", message)
         else:
             logger.debug("Sensor with id %s is still offline...", sensor.id)
@@ -231,6 +243,7 @@ class EdgeService:
                 if sensor.state == DeviceState.OFFLINE:
                     sensor.online()
                     self.message_service.send_notification("Device status changed", "Sensor with id %s came online." % sensor.id)
+                    self.firestore.update_sensor_data(sensor)
 
                 # check the data for possible fire or high CO concentration
                 self.check_data_alerts(measurement)
