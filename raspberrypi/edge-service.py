@@ -26,9 +26,9 @@ class FirestoreClient:
 
     def add_measurement(self, measurement):
         sensor_id = measurement.device_id
-        sensor_doc_ref = self.db.collection(u'sensors').document(sensor_id)
-        measurement_id = measurement.timestamp()
-        sensor_doc_ref.document(measurement_id).set(measurement.dict())
+        measurement_doc_ref = self.db.collection(u'sensors').document(sensor_id).collection(u'measurements')
+        measurement_id = str(measurement.timestamp.timestamp())
+        measurement_doc_ref.document(measurement_id).set(measurement.dict())
 
 
 class TimeoutMonitor:
