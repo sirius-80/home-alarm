@@ -1,0 +1,16 @@
+[Unit]
+Description=Home-alarm Edge service
+Wants=network-online.target
+After=multi-user.target
+
+[Service]
+WorkingDirectory=/home/pi/Projects/home-alarm/raspberrypi
+Environment=PATH=/usr/bin
+ExecStart=/home/pi/Projects/home-alarm/raspberrypi/edge-service.py --base-url=https://<SERVICE-NAME>/cloudfunctions.net/addMessage
+ExecStop=pkill edge-service.py
+
+# Useful during debugging; remove it once the service is working
+StandardOutput=console
+
+[Install]
+WantedBy=multi-user.target
