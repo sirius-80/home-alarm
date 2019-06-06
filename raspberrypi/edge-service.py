@@ -17,10 +17,12 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 
 
+cred = credentials.Certificate('home-monitor-bb687-firebase-adminsdk-t4efc-70544a2138.json')
+firebase_admin.initialize_app(cred)
+
+
 class FirestoreClient:
     def __init__(self):
-        cred = credentials.Certificate('home-monitor-bb687-firebase-adminsdk-t4efc-70544a2138.json')
-        firebase_admin.initialize_app(cred)
         self.db = firestore.client()
 
     def add_measurement(self, measurement):
@@ -32,6 +34,9 @@ class FirestoreClient:
     def update_sensor_data(self, sensor):
         sensor_doc_ref = self.db.collection(u'sensors').document(sensor.id)
         sensor_doc_ref.set(sensor.dict(), merge=True)
+
+    def get_sensor_ids(self):
+        return [sensor.id for sensor in self.db.collection(u'sensors').get()]
 
 
 class TimeoutMonitor:
@@ -209,6 +214,7 @@ class EdgeService:
         self.sensors = {}
         self.monitors = {}
         for sensor_id in sensor_device_id_list:
+            logger.info("Adding sensor to monitor: %s", sensor_id)
             sensor = SensorDevice(sensor_id)
             self.sensors[sensor_id] = sensor
             monitor = TimeoutMonitor(60, self._handle_sensor_timeout, sensor)
@@ -285,5 +291,14 @@ if __name__ == "__main__":
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 
-    service = EdgeService(["6c89f539", "dummy"], args.base_url)
-    service.run()
+
+    try:
+        service = EdgeService(FirestoreClient().get_sensor_ids(), args.base_url)
+        service.run()
+    except KeyboardInterrupt:
+        logger.info("Stopping edge service (keyboard interrupt)")
+    except:
+        logger.exception("Something went horribly wrong!")
+    
+    logger.info("Bye")
+
